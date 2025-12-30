@@ -5,7 +5,38 @@ const API_URL = '/api';
 let currentSessionId = null;
 
 // DOM elements
-let chatMessages, chatInput, sendButton, totalCourses, courseTitles;
+let chatMessages, chatInput, sendButton, totalCourses, courseTitles, themeToggle;
+
+// Theme management
+function initializeTheme() {
+    const savedTheme = localStorage.getItem('theme');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+    // Use saved theme, or system preference, defaulting to dark
+    const theme = savedTheme || (prefersDark ? 'dark' : 'light');
+    setTheme(theme);
+}
+
+function setTheme(theme) {
+    if (theme === 'light') {
+        document.documentElement.setAttribute('data-theme', 'light');
+    } else {
+        document.documentElement.removeAttribute('data-theme');
+    }
+    localStorage.setItem('theme', theme);
+
+    // Update aria-label for accessibility
+    if (themeToggle) {
+        const label = theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode';
+        themeToggle.setAttribute('aria-label', label);
+    }
+}
+
+function toggleTheme() {
+    const currentTheme = document.documentElement.getAttribute('data-theme');
+    const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+    setTheme(newTheme);
+}
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
@@ -15,7 +46,9 @@ document.addEventListener('DOMContentLoaded', () => {
     sendButton = document.getElementById('sendButton');
     totalCourses = document.getElementById('totalCourses');
     courseTitles = document.getElementById('courseTitles');
-    
+    themeToggle = document.getElementById('themeToggle');
+
+    initializeTheme();
     setupEventListeners();
     createNewSession();
     loadCourseStats();
@@ -31,6 +64,18 @@ function setupEventListeners() {
 
     // New chat button
     document.getElementById('newChatBtn').addEventListener('click', createNewSession);
+
+    // Theme toggle button
+    if (themeToggle) {
+        themeToggle.addEventListener('click', toggleTheme);
+        // Keyboard support for Enter and Space
+        themeToggle.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                toggleTheme();
+            }
+        });
+    }
 
     // Suggested questions
     document.querySelectorAll('.suggested-item').forEach(button => {
