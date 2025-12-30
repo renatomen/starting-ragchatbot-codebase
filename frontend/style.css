@@ -160,9 +160,13 @@ body {
     padding: 0;
 }
 
-/* Header - Hidden */
+/* Header */
 header {
-    display: none;
+    padding: 1.5rem 2rem;
+    text-align: center;
+    background: var(--surface);
+    border-bottom: 2px solid var(--border-color);
+    flex-shrink: 0;
 }
 
 header h1 {
