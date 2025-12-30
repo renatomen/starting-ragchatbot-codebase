@@ -103,6 +103,39 @@ header h1 {
     background: var(--text-secondary);
 }
 
+/* New Chat Button */
+.new-chat-btn {
+    padding: 0.5rem 0;
+    margin-bottom: 1.5rem;
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    transition: color 0.2s ease;
+    text-align: left;
+}
+
+.new-chat-btn::before {
+    content: '+';
+    display: inline-block;
+    margin-right: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 700;
+}
+
+.new-chat-btn:focus {
+    outline: none;
+    color: var(--primary-color);
+}
+
+.new-chat-btn:hover {
+    color: var(--primary-color);
+}
+
 .sidebar-section {
     margin-bottom: 1.5rem;
 }
@@ -220,29 +253,92 @@ header h1 {
 
 /* Collapsible Sources */
 .sources-collapsible {
-    margin-top: 0.5rem;
-    font-size: 0.75rem;
+    margin-top: 0.75rem;
+    font-size: 0.8rem;
     color: var(--text-secondary);
 }
 
 .sources-collapsible summary {
     cursor: pointer;
-    padding: 0.25rem 0.5rem;
+    padding: 0.5rem 0.75rem;
     user-select: none;
-    font-weight: 500;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--background);
+    border-radius: 20px;
+    transition: all 0.2s ease;
 }
 
 .sources-collapsible summary:hover {
     color: var(--text-primary);
+    background: var(--surface-hover);
+}
+
+.sources-collapsible summary::before {
+    content: '📚';
+    font-size: 0.9rem;
+}
+
+.sources-collapsible summary::-webkit-details-marker {
+    display: none;
+}
+
+.sources-collapsible summary::after {
+    content: '▶';
+    font-size: 0.6rem;
+    transition: transform 0.2s ease;
+}
+
+.sources-collapsible[open] summary::after {
+    transform: rotate(90deg);
 }
 
 .sources-collapsible[open] summary {
-    margin-bottom: 0.25rem;
+    margin-bottom: 0.5rem;
 }
 
 .sources-content {
-    padding: 0 0.5rem 0.25rem 1.5rem;
-    color: var(--text-secondary);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 0.25rem 0;
+}
+
+.source-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.75rem;
+    background: linear-gradient(135deg, rgba(37, 99, 235, 0.15) 0%, rgba(99, 102, 241, 0.15) 100%);
+    border: 1px solid rgba(37, 99, 235, 0.3);
+    border-radius: 20px;
+    color: #93c5fd;
+    text-decoration: none;
+    font-size: 0.75rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    max-width: 100%;
+}
+
+.source-tag:hover {
+    background: linear-gradient(135deg, rgba(37, 99, 235, 0.25) 0%, rgba(99, 102, 241, 0.25) 100%);
+    border-color: var(--primary-color);
+    color: #bfdbfe;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.2);
+}
+
+.source-tag::before {
+    content: '📄';
+    font-size: 0.85rem;
+}
+
+.source-tag-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 /* Markdown formatting styles */

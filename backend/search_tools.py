@@ -89,29 +89,117 @@ class CourseSearchTool(Tool):
         """Format search results with course and lesson context"""
         formatted = []
         sources = []  # Track sources for the UI
-        
+
         for doc, meta in zip(results.documents, results.metadata):
             course_title = meta.get('course_title', 'unknown')
             lesson_num = meta.get('lesson_number')
-            
+
             # Build context header
             header = f"[{course_title}"
             if lesson_num is not None:
                 header += f" - Lesson {lesson_num}"
             header += "]"
-            
-            # Track source for the UI
-            source = course_title
+
+            # Build source text
+            source_text = course_title
             if lesson_num is not None:
-                source += f" - Lesson {lesson_num}"
+                source_text += f" - Lesson {lesson_num}"
+
+            # Look up lesson link and create clickable source
+            lesson_link = None
+            if lesson_num is not None:
+                lesson_link = self.store.get_lesson_link(course_title, lesson_num)
+
+            if lesson_link:
+                # Create invisible link (text is clickable, URL not shown)
+                source = f'<a href="{lesson_link}" target="_blank" rel="noopener">{source_text}</a>'
+            else:
+                source = source_text
+
             sources.append(source)
-            
             formatted.append(f"{header}\n{doc}")
-        
+
         # Store sources for retrieval
         self.last_sources = sources
-        
+
         return "\n\n".join(formatted)
+
+class CourseOutlineTool(Tool):
+    """Tool for retrieving course outlines with lesson information"""
+
+    def __init__(self, vector_store: VectorStore):
+        self.store = vector_store
+        self.last_sources = []  # Track sources from last search
+
+    def get_tool_definition(self) -> Dict[str, Any]:
+        """Return Anthropic tool definition for this tool"""
+        return {
+            "name": "get_course_outline",
+            "description": "Get the complete outline of a course including title, link, and all lessons. Use this tool when asked about course structure, outline, syllabus, lesson list, or what topics a course covers.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "course_name": {
+                        "type": "string",
+                        "description": "Course title to get outline for (partial matches work, e.g. 'MCP', 'Introduction')"
+                    }
+                },
+                "required": ["course_name"]
+            }
+        }
+
+    def execute(self, course_name: str) -> str:
+        """
+        Execute the outline tool to get course structure.
+
+        Args:
+            course_name: Course name/title to look up
+
+        Returns:
+            Formatted course outline or error message
+        """
+        import json
+
+        # Use vector search to find the best matching course
+        try:
+            results = self.store.course_catalog.query(
+                query_texts=[course_name],
+                n_results=1
+            )
+
+            if not results['documents'][0] or not results['metadatas'][0]:
+                return f"No course found matching '{course_name}'"
+
+            metadata = results['metadatas'][0][0]
+            course_title = metadata.get('title', 'Unknown')
+            course_link = metadata.get('course_link', '')
+            lessons_json = metadata.get('lessons_json', '[]')
+
+            # Parse lessons
+            lessons = json.loads(lessons_json)
+
+            # Format the outline
+            outline = f"**Course:** {course_title}\n"
+            if course_link:
+                outline += f"**Course Link:** {course_link}\n"
+            outline += f"\n**Lessons ({len(lessons)} total):**\n"
+
+            for lesson in lessons:
+                lesson_num = lesson.get('lesson_number', '?')
+                lesson_title = lesson.get('lesson_title', 'Untitled')
+                outline += f"- Lesson {lesson_num}: {lesson_title}\n"
+
+            # Track source for UI
+            if course_link:
+                self.last_sources = [f'<a href="{course_link}" target="_blank" rel="noopener">{course_title}</a>']
+            else:
+                self.last_sources = [course_title]
+
+            return outline
+
+        except Exception as e:
+            return f"Error retrieving course outline: {str(e)}"
+
 
 class ToolManager:
     """Manages available tools for the AI"""

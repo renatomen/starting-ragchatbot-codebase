@@ -28,8 +28,10 @@ function setupEventListeners() {
     chatInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') sendMessage();
     });
-    
-    
+
+    // New chat button
+    document.getElementById('newChatBtn').addEventListener('click', createNewSession);
+
     // Suggested questions
     document.querySelectorAll('.suggested-item').forEach(button => {
         button.addEventListener('click', (e) => {
@@ -122,10 +124,21 @@ function addMessage(content, type, sources = null, isWelcome = false) {
     let html = `<div class="message-content">${displayContent}</div>`;
     
     if (sources && sources.length > 0) {
+        const sourceTags = sources.map(source => {
+            // Check if the source is already an HTML link
+            const linkMatch = source.match(/<a\s+href="([^"]+)"[^>]*>([^<]+)<\/a>/);
+            if (linkMatch) {
+                const [, href, text] = linkMatch;
+                return `<a href="${href}" class="source-tag" target="_blank" rel="noopener noreferrer"><span class="source-tag-text">${text}</span></a>`;
+            }
+            // Plain text source
+            return `<span class="source-tag"><span class="source-tag-text">${escapeHtml(source)}</span></span>`;
+        }).join('');
+
         html += `
             <details class="sources-collapsible">
                 <summary class="sources-header">Sources</summary>
-                <div class="sources-content">${sources.join(', ')}</div>
+                <div class="sources-content">${sourceTags}</div>
             </details>
         `;
     }

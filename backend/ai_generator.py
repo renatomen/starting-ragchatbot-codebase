@@ -3,23 +3,39 @@ from typing import List, Optional, Dict, Any
 
 class AIGenerator:
     """Handles interactions with Anthropic's Claude API for generating responses"""
-    
-    # Static system prompt to avoid rebuilding on each call
-    SYSTEM_PROMPT = """ You are an AI assistant specialized in course materials and educational content with access to a comprehensive search tool for course information.
 
-Search Tool Usage:
-- Use the search tool **only** for questions about specific course content or detailed educational materials
-- **One search per query maximum**
-- Synthesize search results into accurate, fact-based responses
-- If search yields no results, state this clearly without offering alternatives
+    MAX_TOOL_ROUNDS = 2  # Maximum sequential tool calling rounds per query
+
+    # Static system prompt to avoid rebuilding on each call
+    SYSTEM_PROMPT = """ You are an AI assistant specialized in course materials and educational content with access to tools for course information.
+
+Available Tools:
+1. **search_course_content**: Search course materials for specific content or detailed educational materials
+2. **get_course_outline**: Get the complete structure of a course including title, link, and all lessons with their numbers and titles
+
+Tool Usage Guidelines:
+- Use **get_course_outline** for questions about:
+  - Course structure, outline, or syllabus
+  - What lessons a course contains
+  - Course overview or topics covered
+  - When listing all lessons in a course
+- Use **search_course_content** for questions about:
+  - Specific content within lessons
+  - Detailed explanations or concepts
+  - Finding information across courses
+- **Sequential tool use supported**: You may make up to 2 rounds of tool calls if needed
+- Use multiple calls for complex queries requiring information from different courses/lessons
+- After each tool result, determine if additional information is needed before answering
+- Synthesize tool results into accurate, fact-based responses
+- If a tool yields no results, state this clearly without offering alternatives
 
 Response Protocol:
-- **General knowledge questions**: Answer using existing knowledge without searching
-- **Course-specific questions**: Search first, then answer
+- **General knowledge questions**: Answer using existing knowledge without using tools
+- **Course outline questions**: Use get_course_outline, then present the course title, course link, and complete lesson list (lesson number and title for each)
+- **Course content questions**: Use search_course_content, then answer
 - **No meta-commentary**:
  - Provide direct answers only — no reasoning process, search explanations, or question-type analysis
- - Do not mention "based on the search results"
-
+ - Do not mention "based on the search results" or "based on the tool results"
 
 All responses must be:
 1. **Brief, Concise and focused** - Get to the point quickly
@@ -81,55 +97,83 @@ Provide only the direct answer to what was asked.
         
         # Handle tool execution if needed
         if response.stop_reason == "tool_use" and tool_manager:
-            return self._handle_tool_execution(response, api_params, tool_manager)
-        
+            return self._execute_tool_loop(response, api_params, tool_manager, tools)
+
         # Return direct response
-        return response.content[0].text
-    
-    def _handle_tool_execution(self, initial_response, base_params: Dict[str, Any], tool_manager):
-        """
-        Handle execution of tool calls and get follow-up response.
-        
+        return self._extract_text_response(response)
+
+    def _extract_text_response(self, response) -> str:
+        """Extract text content from API response.
+
         Args:
-            initial_response: The response containing tool use requests
-            base_params: Base API parameters
-            tool_manager: Manager to execute tools
-            
+            response: Anthropic API response object
+
         Returns:
-            Final response text after tool execution
+            Text content or empty string if no text found
         """
-        # Start with existing messages
-        messages = base_params["messages"].copy()
-        
-        # Add AI's tool use response
-        messages.append({"role": "assistant", "content": initial_response.content})
-        
-        # Execute all tool calls and collect results
-        tool_results = []
-        for content_block in initial_response.content:
-            if content_block.type == "tool_use":
-                tool_result = tool_manager.execute_tool(
-                    content_block.name, 
-                    **content_block.input
-                )
-                
-                tool_results.append({
-                    "type": "tool_result",
-                    "tool_use_id": content_block.id,
-                    "content": tool_result
-                })
-        
-        # Add tool results as single message
-        if tool_results:
-            messages.append({"role": "user", "content": tool_results})
-        
-        # Prepare final API call without tools
-        final_params = {
-            **self.base_params,
-            "messages": messages,
-            "system": base_params["system"]
-        }
-        
-        # Get final response
-        final_response = self.client.messages.create(**final_params)
-        return final_response.content[0].text
+        for block in response.content:
+            if block.type == "text":
+                return block.text
+        return ""
+
+    def _execute_tool_loop(self, response, api_params: Dict[str, Any],
+                           tool_manager, tools: List) -> str:
+        """Execute tools in a loop, allowing up to MAX_TOOL_ROUNDS rounds.
+
+        Args:
+            response: Initial response containing tool_use blocks
+            api_params: Base API parameters with messages and system prompt
+            tool_manager: Manager to execute tools
+            tools: Tool definitions for subsequent API calls
+
+        Returns:
+            Final text response after all tool rounds complete
+        """
+        messages = api_params["messages"].copy()
+        current_response = response
+        round_count = 0
+
+        while round_count < self.MAX_TOOL_ROUNDS:
+            round_count += 1
+
+            # Add assistant's tool_use response
+            messages.append({"role": "assistant", "content": current_response.content})
+
+            # Execute all tool calls
+            tool_results = []
+            for block in current_response.content:
+                if block.type == "tool_use":
+                    try:
+                        result = tool_manager.execute_tool(block.name, **block.input)
+                        tool_results.append({
+                            "type": "tool_result",
+                            "tool_use_id": block.id,
+                            "content": result
+                        })
+                    except Exception as e:
+                        # On error, return text from current response or error message
+                        return self._extract_text_response(current_response) or f"Tool error: {e}"
+
+            # Add tool results
+            if tool_results:
+                messages.append({"role": "user", "content": tool_results})
+
+            # Build next API call
+            next_params = {
+                **self.base_params,
+                "messages": messages,
+                "system": api_params["system"]
+            }
+
+            # Include tools if rounds remaining
+            if round_count < self.MAX_TOOL_ROUNDS:
+                next_params["tools"] = tools
+                next_params["tool_choice"] = {"type": "auto"}
+
+            current_response = self.client.messages.create(**next_params)
+
+            # Exit if Claude didn't request more tools
+            if current_response.stop_reason != "tool_use":
+                break
+
+        return self._extract_text_response(current_response)
